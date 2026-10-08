@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inside the engine: 3-hour theory resource</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#F3F5F7; --card:#FFFFFF; --ink:#14263D; --muted:#566779; --line:#C9D3DB; --steel:#DCE3E9;
+  --amber:#F2A900; --amberbg:#FFF4D6; --good:#1B7A5F; --goodbg:#DDF3EA; --bad:#B93428; --badbg:#FBE4E1;
+  --blue:#2C6EA6; --bluebg:#E3EEF8; --focus:#1F5FBF;
+  --head:'Barlow Condensed','Arial Narrow',Arial,sans-serif;
+  --body:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --paper:#0E1A2A; --card:#162538; --ink:#E8EEF4; --muted:#A3B3C3; --line:#2C3F55; --steel:#26394F;
+    --amber:#F4B73A; --amberbg:#3A3017; --good:#52C9A1; --goodbg:#143428; --bad:#F08377; --badbg:#3F1D1A;
+    --blue:#7DB6E8; --bluebg:#162F46; --focus:#8FB8F5;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--paper);color:var(--ink);font:400 17px/1.55 var(--body)}
+[hidden]{display:none!important}
+a{color:var(--blue)}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+h1,h2,h3,h4{font-family:var(--head);line-height:1.05;margin:0}
+p{margin:.6rem 0;max-width:68ch}
+
+.shell{display:grid;grid-template-columns:240px minmax(0,1fr);max-width:1200px;margin:0 auto}
+.rail{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:1.5rem 1rem;border-right:1px solid var(--line)}
+.rail .brand{font:700 1.7rem/1 var(--head);margin:0 .6rem 1.2rem}
+.rail a{display:flex;justify-content:space-between;gap:.5rem;padding:.55rem .7rem;border-radius:6px;color:inherit;text-decoration:none;font-weight:500;font-size:.95rem}
+.rail a:hover{background:var(--steel)}
+.rail a.active{background:var(--ink);color:var(--paper)}
+.rail a .pg{font-size:.8rem;color:var(--muted);white-space:nowrap}
+.rail a.active .pg{color:var(--paper)}
+.rail a.done .pg{color:var(--good);font-weight:700}
+.rail a.active.done .pg{color:var(--paper)}
+.rail .brk{padding:.35rem .7rem;font-size:.85rem;color:var(--muted);font-style:italic}
+.rail .overall{margin:1.2rem .7rem 0;font-size:.85rem;color:var(--muted)}
+.rail .bar{height:6px;background:var(--steel);border-radius:3px;margin-top:.35rem;overflow:hidden}
+.rail .bar i{display:block;height:100%;width:0;background:var(--amber);transition:width .3s}
+
+main{padding:0 1.5rem 5rem;min-width:0}
+.hero{padding:3rem 0 1rem}
+.hero h1{font-size:clamp(3rem,8vw,5.2rem);font-weight:700}
+.hero .sub{font-size:1.2rem;color:var(--muted);max-width:56ch}
+.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:1rem;margin:1.8rem 0 0}
+.rules div{border-top:4px solid var(--amber);padding-top:.6rem}
+.rules b{font:700 1.35rem var(--head);display:block}
+.rules span{color:var(--muted);font-size:.95rem}
+
+.plan-scroll{overflow-x:auto;margin:2rem 0 0;padding-bottom:.4rem}
+.plan{display:flex;gap:3px;min-width:700px}
+.plan a,.plan span{flex:var(--m) 1 0;min-width:0;background:var(--steel);color:var(--ink);padding:.5rem .45rem;border-radius:4px;font-size:.78rem;line-height:1.25;text-decoration:none;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.plan a:hover{background:var(--amber);color:#14263D}
+.plan b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis}
+.plan span.brk{background:repeating-linear-gradient(135deg,var(--steel) 0 6px,var(--paper) 6px 12px);color:var(--muted)}
+.plan-cap{font-size:.85rem;color:var(--muted);margin:.4rem 0 0}
+
+.sec{padding:3.2rem 0 .5rem;scroll-margin-top:1rem}
+.sec>header{display:flex;flex-wrap:wrap;align-items:baseline;gap:.4rem 1rem;margin-bottom:.4rem}
+.sec h2{font-size:clamp(2.2rem,5vw,3.2rem);font-weight:700}
+.time{font-size:.9rem;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:.1rem .7rem;white-space:nowrap}
+.lead{color:var(--muted);font-size:1.05rem;max-width:62ch}
+h3{font-size:1.6rem;font-weight:600;margin:1.8rem 0 .4rem}
+
+.btn{background:var(--ink);color:var(--paper);border:2px solid var(--ink);padding:.55rem 1rem;border-radius:6px;font:600 .95rem var(--body);cursor:pointer}
+.btn:hover{opacity:.88}
+.btn.alt{background:transparent;color:var(--ink)}
+.btn.small{padding:.3rem .7rem;font-size:.85rem}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin:.9rem 0}
+
+.think{border-left:5px solid var(--amber);background:var(--amberbg);padding:1rem 1.1rem;border-radius:0 8px 8px 0;margin:1.1rem 0}
+.think>p:first-child{margin-top:0}
+textarea,input[type=number],select{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:6px;padding:.5rem .6rem}
+textarea{width:100%;min-height:4.5rem;resize:vertical;display:block;margin:.5rem 0 .7rem}
+.answer{margin-top:1rem;padding-top:1rem;border-top:1px dashed var(--muted)}
+label.ta{display:block;margin:1rem 0}
+label.ta>span{display:block;font-weight:500}
+
+.fact{border-left:4px solid var(--line);padding:.1rem 0 .1rem .9rem;margin:.9rem 0;background:var(--card);border-radius:0 6px 6px 0}
+.fact h4{font-size:1.1rem;font-weight:600;margin-bottom:.1rem}
+.fact p{margin:.2rem 0 .5rem}
+.fact.job{border-color:var(--blue)} .fact.built{border-color:var(--muted)} .fact.fail{border-color:var(--bad)} .fact.mod{border-color:var(--amber)}
+.fact.job h4{color:var(--blue)} .fact.fail h4{color:var(--bad)}
+label.self{display:flex;gap:.5rem;align-items:center;margin-top:.8rem;font-weight:500}
+
+details.card{background:var(--card);border:1px solid var(--line);border-radius:8px;margin:.6rem 0}
+details.card>summary{padding:.8rem 1rem;display:flex;gap:.7rem;align-items:center;cursor:pointer;font:600 1.4rem var(--head);list-style:none}
+details.card>summary::-webkit-details-marker{display:none}
+details.card>summary::after{content:'+';margin-left:auto;font:600 1.5rem var(--body)}
+details.card[open]>summary::after{content:'\2013'}
+details.card[open]>summary{border-bottom:1px solid var(--line)}
+.card-body{padding:0 1rem 1rem}
+.chip{font:600 .78rem var(--body);background:var(--steel);border-radius:99px;padding:.12rem .6rem}
+.pills{display:flex;flex-wrap:wrap;gap:.5rem;margin:1.2rem 0 .6rem}
+.pill{border:2px solid var(--ink);background:transparent;color:var(--ink);border-radius:99px;padding:.25rem .9rem;font:600 .9rem var(--body);cursor:pointer}
+.pill[aria-pressed=true]{background:var(--ink);color:var(--paper)}
+
+.engine-wrap{display:grid;grid-template-columns:minmax(260px,360px) minmax(0,1fr);gap:1.5rem;align-items:start;margin:1.2rem 0}
+.engine-wrap svg{width:100%;height:auto;background:var(--card);border:1px solid var(--line);border-radius:8px}
+.s-metal{fill:var(--steel);stroke:var(--ink);stroke-width:1.5}
+.s-ink{fill:var(--ink)}
+.s-rod{stroke:var(--ink);stroke-width:8;stroke-linecap:round}
+.s-ring{stroke:var(--ink);stroke-width:2}
+.s-circle{fill:none;stroke:var(--muted);stroke-width:1.5;stroke-dasharray:4 4}
+.s-text{fill:var(--muted);font:12px var(--body)}
+.readout{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:1rem 1.2rem}
+.readout .big{font:700 2.4rem/1 var(--head);margin-bottom:.6rem}
+.readout dl{display:grid;grid-template-columns:auto 1fr;gap:.25rem 1rem;margin:0}
+.readout dt{color:var(--muted)} .readout dd{margin:0;font-weight:600}
+input[type=range]{width:100%;accent-color:var(--amber)}
+.controls{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-top:.9rem}
+
+.tblwrap{overflow-x:auto;margin:1rem 0}
+table{border-collapse:collapse;width:100%;background:var(--card);min-width:620px}
+th,td{border:1px solid var(--line);padding:.5rem .6rem;text-align:left;vertical-align:top}
+th{background:var(--steel);font-weight:600}
+td select{width:100%}
+select.ok{border-color:var(--good);background:var(--goodbg)}
+select.no{border-color:var(--bad);background:var(--badbg)}
+.msg{padding:.7rem 1rem;border-radius:6px;margin:.8rem 0;font-weight:500}
+.msg.good{background:var(--goodbg);color:var(--good)} .msg.bad{background:var(--badbg);color:var(--bad)} .msg.info{background:var(--bluebg);color:var(--ink)}
+
+.break{margin:3rem 0 0;padding:1.4rem;border:2px dashed var(--muted);border-radius:10px;scroll-margin-top:1rem}
+.break h2{font-size:2rem}
+
+.case,.quizcard,.calc,.chal,.slides{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:1.1rem 1.2rem;margin:1rem 0}
+.case h3{margin-top:0}
+.opts{display:grid;gap:.5rem;margin:.8rem 0}
+.opt{text-align:left;background:var(--paper);color:var(--ink);border:2px solid var(--line);border-radius:6px;padding:.65rem .9rem;font:500 1rem var(--body);cursor:pointer}
+.opt:hover:not(:disabled){border-color:var(--ink)}
+.opt.right{border-color:var(--good);background:var(--goodbg)}
+.opt.wrong{border-color:var(--bad);background:var(--badbg)}
+.opt:disabled{cursor:default}
+.case ol{padding-left:1.3rem;margin:.4rem 0}
+.case li{margin:.25rem 0}
+
+.calc .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.8rem}
+.calc label{display:block;font-weight:500;font-size:.92rem}
+.calc input{width:100%;margin-top:.2rem}
+.out{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:.8rem;margin-top:1rem}
+.out div{background:var(--paper);border-radius:6px;padding:.6rem .8rem}
+.out b{display:block;font:700 1.8rem/1.1 var(--head)}
+.formula{font:500 1.05rem ui-monospace,Menlo,Consolas,monospace;background:var(--steel);padding:.7rem 1rem;border-radius:6px;margin:.6rem 0;overflow-x:auto}
+.chal .in{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin:.6rem 0}
+.chal input[type=number]{width:9rem}
+
+.checks{display:grid;gap:.4rem;margin:.8rem 0}
+.checks label{display:flex;gap:.6rem;align-items:flex-start;padding:.5rem .7rem;border:2px solid var(--line);border-radius:6px;background:var(--paper)}
+.checks label.right{border-color:var(--good);background:var(--goodbg)}
+.checks label.miss{border-color:var(--amber);background:var(--amberbg)}
+.checks label.wrong{border-color:var(--bad);background:var(--badbg)}
+.checks small{display:block;color:var(--muted);margin-top:.15rem}
+
+.qhead{display:flex;justify-content:space-between;font-size:.9rem;color:var(--muted)}
+.qbar{height:6px;background:var(--steel);border-radius:3px;overflow:hidden;margin:.4rem 0 1rem}
+.qbar i{display:block;height:100%;background:var(--amber)}
+.qq{font:600 1.5rem/1.2 var(--head);margin:.2rem 0 .4rem;font-family:var(--body);font-size:1.15rem;line-height:1.4}
+.scoreline{font:700 3.2rem/1 var(--head)}
+.topics{display:grid;gap:.5rem;margin:1rem 0}
+.topics div{display:grid;grid-template-columns:150px 1fr 50px;gap:.7rem;align-items:center;font-size:.95rem}
+.topics .tb{height:10px;background:var(--steel);border-radius:5px;overflow:hidden}
+.topics .tb i{display:block;height:100%;background:var(--good)}
+
+.slide{display:grid;grid-template-columns:minmax(0,1fr) 150px 2rem;gap:.8rem;align-items:center;margin:.5rem 0}
+.slide output{font-weight:700;text-align:center}
+.cmp td:nth-child(n+2),.cmp th:nth-child(n+2){text-align:center}
+.up{color:var(--good);font-weight:700}
+
+@media (max-width:1000px){
+  .shell{grid-template-columns:minmax(0,1fr)}
+  .rail{position:sticky;z-index:10;height:auto;display:flex;gap:.2rem;overflow-x:auto;padding:.5rem;background:var(--paper);border-right:0;border-bottom:1px solid var(--line)}
+  .rail .brand,.rail .overall,.rail .brk{display:none}
+  .rail a{white-space:nowrap}
+  .sec{scroll-margin-top:4rem}
+  .break{scroll-margin-top:4rem}
+}
+@media (max-width:700px){
+  main{padding:0 1rem 4rem}
+  .engine-wrap{grid-template-columns:1fr}
+  .topics div{grid-template-columns:100px 1fr 44px}
+}
+@media print{
+  .rail,.plan-scroll,.controls,.btn,.pills{display:none!important}
+  body{background:#fff;color:#000}
+  details.card:not([open])>.card-body{display:block}
+}
+</style>
+</head>
+<body>
+<noscript><p style="padding:1rem">This resource needs JavaScript switched on to work.</p></noscript>
+<div class="shell">
+<nav class="rail" id="rail" aria-label="Lesson sections"></nav>
+<main>
+
+<header class="hero">
+  <h1>Inside the engine</h1>
+  <p class="sub">Core components, what they do, what you can change, and what goes wrong when engines are misused or neglected. Three hours, and you do the thinking.</p>
+  <div class="rules">
+    <div><b>Think first, reveal second</b><span>Every prompt asks for your answer before it shows ours. Even a wrong guess helps you remember the right answer.</span></div>
+    <div><b>Write it down</b><span>Your answers save on this device as you type. At the end you can download them as notes.</span></div>
+    <div><b>Test yourself</b><span>Finish with a 20-question quiz. Missed questions can be retried until they stick.</span></div>
+  </div>
+  <div class="plan-scroll"><div class="plan" id="plan"></div></div>
+  <p class="plan-cap">Suggested timings. Click a block to jump to it. Your tutor may change the pace on the day.</p>
+</header>
+
+<!-- STARTER -->
+<section class="sec" id="start">
+  <header><h2>Starter</h2><span class="time">10 min</span></header>
+  <p class="lead">Before you learn anything new, find out what you already know. Nobody is marked on this.</p>
+  <div id="startPrompts"></div>
+  <h3>How confident are you right now?</h3>
+  <p>Slide each one. A 1 means it's new to you, a 5 means you could teach it. You'll rate yourself again at the end.</p>
+  <div class="slides" id="preSlides"></div>
+  <div class="row"><button class="btn" id="savePre">Save my starting point</button><span id="preMsg" class="msg info" hidden>Saved. Let's go.</span></div>
+</section>
+
+<!-- CYCLE -->
+<section class="sec" id="cycle">
+  <header><h2>The four-stroke cycle</h2><span class="time">20 min</span></header>
+  <p class="lead">Everything else in this lesson hangs off this. Get it solid first.</p>
+
+  <h3>Watch the engine run</h3>
+  <p>Drag the slider or press play. The crankshaft turns 720&deg; for one full cycle. Tick <em>prediction mode</em> to hide the labels, then guess the stroke before you reveal it.</p>
+  <div class="engine-wrap">
+    <svg id="engineSvg" viewBox="0 0 360 420" role="img" aria-label="Animated single-cylinder four-stroke engine showing piston, valves, connecting rod and crankshaft">
+      <path id="portIn" d="M26 60 L148 60 L148 100" fill="none" stroke="#2C6EA6" stroke-width="14" opacity="0"/>
+      <path id="portEx" d="M212 100 L212 60 L334 60" fill="none" stroke="#7A8794" stroke-width="14" opacity="0"/>
+      <rect x="100" y="80" width="160" height="70" class="s-metal"/>
+      <rect x="92" y="150" width="18" height="150" class="s-metal"/>
+      <rect x="250" y="150" width="18" height="150" class="s-metal"/>
+      <rect x="176" y="72" width="8" height="78" class="s-ink"/>
+      <rect id="gas" x="110" y="150" width="140" height="15" fill="#2C6EA6" opacity=".5"/>
+      <g id="valveIn" transform="translate(148 0)"><rect x="-2" y="70" width="4" height="76" class="s-ink"/><rect x="-14" y="146" width="28" height="5" rx="1" class="s-ink"/></g>
+      <g id="valveEx" transform="translate(212 0)"><rect x="-2" y="70" width="4" height="76" class="s-ink"/><rect x="-14" y="146" width="28" height="5" rx="1" class="s-ink"/></g>
+      <polygon id="spark" points="180,150 171,162 178,162 173,174 189,157 182,157" fill="#FFD23F" stroke="#B93428" stroke-width="1" opacity="0"/>
+      <g id="pistonG">
+        <rect x="112" y="165" width="136" height="52" rx="3" class="s-metal"/>
+        <line x1="112" y1="171" x2="248" y2="171" class="s-ring"/><line x1="112" y1="177" x2="248" y2="177" class="s-ring"/><line x1="112" y1="184" x2="248" y2="184" class="s-ring"/>
+        <circle cx="180" cy="200" r="6" class="s-ink"/>
+      </g>
+      <line id="rod" x1="180" y1="200" x2="180" y2="310" class="s-rod"/>
+      <circle cx="180" cy="350" r="50" class="s-circle"/>
+      <line id="arm" x1="180" y1="350" x2="180" y2="310" stroke="var(--muted)" stroke-width="8" stroke-linecap="round"/>
+      <circle id="cw" cx="180" cy="376" r="17" class="s-metal"/>
+      <circle id="cpin" cx="180" cy="310" r="9" class="s-metal"/>
+      <circle cx="180" cy="350" r="6" class="s-ink"/>
+      <text x="86" y="169" text-anchor="end" class="s-text">TDC</text>
+      <text x="86" y="249" text-anchor="end" class="s-text">BDC</text>
+      <text x="26" y="44" class="s-text">Inlet</text>
+      <text x="334" y="44" text-anchor="end" class="s-text">Exhaust</text>
+    </svg>
+    <div>
+      <div class="readout" aria-live="polite">
+        <div class="big" id="rStroke">Intake</div>
+        <dl>
+          <dt>Crank angle</dt><dd id="rCrank">0&deg;</dd>
+          <dt>Cam angle</dt><dd id="rCam">0&deg;</dd>
+          <dt>Piston</dt><dd id="rPiston">Moving down</dd>
+          <dt>Valves</dt><dd id="rValves">Inlet open</dd>
+        </dl>
+      </div>
+      <div class="controls">
+        <button class="btn" id="playBtn">Play</button>
+        <button class="btn alt" id="nextBtn">Next stroke</button>
+        <label>Speed <select id="speedSel"><option value="30">Slow</option><option value="60" selected>Normal</option><option value="120">Fast</option></select></label>
+      </div>
+      <label class="self" style="margin-top:.8rem"><input type="checkbox" id="predict"> Prediction mode (hide the labels)</label>
+      <input type="range" id="crankSlider" min="0" max="719" step="1" value="30" aria-label="Crank angle in degrees" style="margin-top:.8rem">
+    </div>
+  </div>
+
+  <h3>Fill in the cycle yourself</h3>
+  <p>Complete every box from what you've seen, then check. Red boxes need another look at the animation.</p>
+  <div class="tblwrap"><table id="cycleTable"></table></div>
+  <div class="row"><button class="btn" id="checkCycle">Check my table</button><button class="btn alt" id="resetCycle">Clear</button></div>
+  <div id="cycleMsg"></div>
+
+  <div id="cycleThinks"></div>
+</section>
+
+<!-- COMPONENTS -->
+<section class="sec" id="components">
+  <header><h2>Core components</h2><span class="time">40 min</span></header>
+  <p class="lead">Thirteen parts. Open each one, write your prediction, then reveal. You'll get its job, how it's built, what happens if it's neglected or misused, and what tuners do to it.</p>
+  <div class="pills" role="group" aria-label="Filter components">
+    <button class="pill" data-filter="All" aria-pressed="true">All</button>
+    <button class="pill" data-filter="Structure" aria-pressed="false">Structure</button>
+    <button class="pill" data-filter="Moving parts" aria-pressed="false">Moving parts</button>
+    <button class="pill" data-filter="Valve train" aria-pressed="false">Valve train</button>
+  </div>
+  <div id="compList"></div>
+</section>
+
+<aside class="break" id="break">
+  <h2>Break: 10 minutes</h2>
+  <p>Step away from the screen. When you're back, do this from memory before you read anything else.</p>
+  <div id="breakPrompt"></div>
+</aside>
+
+<!-- SYSTEMS -->
+<section class="sec" id="systems">
+  <header><h2>Supporting systems</h2><span class="time">15 min</span></header>
+  <p class="lead">The components can't survive without these. Most engine failures start in one of them.</p>
+  <div id="sysList"></div>
+</section>
+
+<!-- MODS -->
+<section class="sec" id="mods">
+  <header><h2>Modifications</h2><span class="time">30 min</span></header>
+  <p class="lead">Every modification spends part of the engine's safety margin. Your job is to spot what it spends and what it exposes next.</p>
+  <div id="modList"></div>
+
+  <h3>The weakest-link challenge</h3>
+  <div class="case">
+    <p><b>The brief.</b> A customer brings in a 10-year-old 1.6 petrol hatchback with 110,000 miles on a naturally aspirated engine with standard internals. They want it turbocharged for roughly 50% more power. Tick everything you would check, upgrade or discuss <em>before</em> taking their money.</p>
+    <div class="checks" id="wlList"></div>
+    <div class="row"><button class="btn" id="wlCheck">Check my list</button></div>
+    <div id="wlMsg"></div>
+  </div>
+</section>
+
+<!-- FAILURES -->
+<section class="sec" id="failures">
+  <header><h2>When it goes wrong</h2><span class="time">25 min</span></header>
+  <p class="lead">Six workshop cases. Read the symptoms, commit to a diagnosis, then follow the chain of events that led there. Finish each by explaining it to the customer in your own words.</p>
+  <div id="caseList"></div>
+</section>
+
+<!-- MATHS -->
+<section class="sec" id="maths">
+  <header><h2>The numbers</h2><span class="time">10 min</span></header>
+  <p class="lead">Capacity and compression ratio explain half of what modifications do. Use the calculator to explore, then try the four challenges by hand.</p>
+  <div class="formula">Swept volume (one cylinder) = &pi;/4 &times; bore&sup2; &times; stroke<br>Engine capacity = swept volume &times; number of cylinders<br>Compression ratio = (swept volume + clearance volume) &divide; clearance volume</div>
+  <p>Work in millimetres, then divide by 1,000 to turn mm&sup3; into cc.</p>
+  <div class="calc">
+    <div class="grid">
+      <label>Bore (mm)<input type="number" id="cBore" value="81" step="0.1" min="0"></label>
+      <label>Stroke (mm)<input type="number" id="cStroke" value="77.4" step="0.1" min="0"></label>
+      <label>Cylinders<input type="number" id="cCyl" value="4" step="1" min="1"></label>
+      <label>Clearance volume (cc)<input type="number" id="cClr" value="42.5" step="0.1" min="0"></label>
+    </div>
+    <div class="out">
+      <div>Swept volume per cylinder<b id="oSwept">-</b></div>
+      <div>Engine capacity<b id="oCap">-</b></div>
+      <div>Compression ratio<b id="oCR">-</b></div>
+    </div>
+  </div>
+  <p><em>Try it:</em> change the stroke, then the clearance volume. Which one moves capacity? Which one moves compression ratio?</p>
+  <h3>Challenges</h3>
+  <div id="chalList"></div>
+  <div id="mathsThink"></div>
+</section>
+
+<!-- QUIZ -->
+<section class="sec" id="quiz">
+  <header><h2>Quiz</h2><span class="time">15 min</span></header>
+  <p class="lead">Twenty questions, feedback after each. If you get one wrong, explain to yourself why before you click on.</p>
+  <div id="quizBox"></div>
+</section>
+
+<!-- WRAP -->
+<section class="sec" id="wrap">
+  <header><h2>Wrap-up</h2><span class="time">5 min</span></header>
+  <div id="wrapPrompts"></div>
+  <h3>Rate yourself again</h3>
+  <div class="slides" id="postSlides"></div>
+  <div class="row"><button class="btn" id="compareBtn">See how I've moved</button></div>
+  <div id="compare"></div>
+  <h3>Take your notes with you</h3>
+  <p>Your answers are saved in this browser on this device only. Download them if you want to keep them or hand them in.</p>
+  <div class="row"><button class="btn" id="dlBtn">Download my notes (.txt)</button><button class="btn alt" id="printBtn">Print this page</button></div>
+</section>
+
+</main>
+</div>
+
+<script>
+/* ---------- helpers ---------- */
+const $=(s,r=document)=>r.querySelector(s);
+const $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+const shuffle=a=>{for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;};
+const Store=(()=>{const K='engines-theory-resource-v1';let m={};try{const r=localStorage.getItem(K);if(r)m=JSON.parse(r)||{};}catch(e){}
+  return{get:(k,d)=>(k in m?m[k]:d),set:(k,v)=>{m[k]=v;try{localStorage.setItem(K,JSON.stringify(m));}catch(e){}}};})();
+
+/* ---------- plan, progress, rail ---------- */
+const PLAN=[
+ {id:'start',name:'Starter',min:10,need:1},
+ {id:'cycle',name:'Four-stroke cycle',min:20,need:4},
+ {id:'components',name:'Core components',min:40,need:13},
+ {brk:true,name:'Break',min:10},
+ {id:'systems',name:'Supporting systems',min:15,need:5},
+ {id:'mods',name:'Modifications',min:30,need:9},
+ {id:'failures',name:'When it goes wrong',min:25,need:6},
+ {id:'maths',name:'The numbers',min:10,need:4},
+ {id:'quiz',name:'Quiz',min:15,need:1},
+ {id:'wrap',name:'Wrap-up',min:5,need:1}
+];
+const done=Store.get('done',{});
+function mark(sec,key,on=true){
+  const a=done[sec]=done[sec]||[];const i=a.indexOf(key);
+  if(on&&i<0)a.push(key);if(!on&&i>=0)a.splice(i,1);
+  Store.set('done',done);paintRail();
+}
+function buildNav(){
+  $('#plan').innerHTML=PLAN.map(p=>p.brk
+    ?`<span class="brk" style="--m:${p.min}" title="Break, ${p.min} min"><b>Break</b>${p.min} min</span>`
+    :`<a href="#${p.id}" style="--m:${p.min}" title="${p.name}, ${p.min} min"><b>${p.name}</b>${p.min} min</a>`).join('');
+  $('#rail').innerHTML='<div class="brand">Inside the engine</div>'+PLAN.map(p=>p.brk
+    ?`<div class="brk">Break, ${p.min} min</div>`
+    :`<a href="#${p.id}" data-rail="${p.id}"><span>${p.name}</span><span class="pg"></span></a>`).join('')
+    +'<div class="overall"><span id="ovTxt">0% complete</span><div class="bar"><i id="ovBar"></i></div></div>';
+}
+function paintRail(){
+  let have=0,need=0;
+  PLAN.filter(p=>p.id).forEach(p=>{
+    const n=(done[p.id]||[]).length;const el=$(`[data-rail="${p.id}"]`);if(!el)return;
+    const full=n>=p.need;have+=Math.min(n,p.need);need+=p.need;
+    el.classList.toggle('done',full);
+    el.querySelector('.pg').textContent=full?'\u2713':(p.need>1&&n>0?n+'/'+p.need:'');
+  });
+  const pc=need?Math.round(have/need*100):0;
+  $('#ovTxt').textContent=pc+'% complete';$('#ovBar').style.width=pc+'%';
+}
+function watchActive(){
+  if(!('IntersectionObserver' in window))return;
+  const links=$$('[data-rail]');
+  const io=new IntersectionObserver(es=>{es.forEach(e=>{if(e.isIntersecting){links.forEach(l=>l.classList.toggle('active',l.dataset.rail===e.target.id));}});},{rootMargin:'-25% 0px -65% 0px'});
+  PLAN.filter(p=>p.id).forEach(p=>{const s=document.getElementById(p.id);if(s)io.observe(s);});
+}
+
+/* ---------- reusable prompt blocks ---------- */
+function think({id,sec,label,prompt,answer,btn='Reveal the answer',rows=3}){
+  return `<div class="think"><p><strong>Think first.</strong> ${prompt}</p>
+  <textarea data-note="${id}" data-label="${esc(label)}" rows="${rows}" placeholder="Write your answer here before you reveal..."></textarea>
+  <button class="btn" data-reveal="${id}" data-sec="${sec||''}">${btn}</button>
+  <div class="answer" id="ans-${id}" hidden>${answer}</div></div>`;
+}
+function ta(id,label,prompt,rows=3){
+  return `<label class="ta"><span>${prompt}</span><textarea data-note="${id}" data-label="${esc(label)}" rows="${rows}" placeholder="Type here..."></textarea></label>`;
+}
+function facts(f){return f.map(([k,h,t])=>`<div class="fact ${k}"><h4>${h}</h4><p>${t}</p></div>`).join('');}
+function hydrate(){
+  $$('textarea[data-note]').forEach(t=>{if(!t.dataset.h){t.value=Store.get('note:'+t.dataset.note,'');t.dataset.h=1;}});
+  $$('[data-reveal]').forEach(b=>{if(Store.get('rev:'+b.dataset.reveal,false)){const a=document.getElementById('ans-'+b.dataset.reveal);if(a){a.hidden=false;b.hidden=true;}}});
+  $$('input[data-self]').forEach(c=>{if(!c.dataset.h){c.checked=Store.get('self:'+c.dataset.self,false);c.dataset.h=1;}});
+}
+document.addEventListener('input',e=>{
+  if(e.target.matches('textarea[data-note]'))Store.set('note:'+e.target.dataset.note,e.target.value);
+});
+document.addEventListener('change',e=>{
+  if(e.target.matches('input[data-self]'))Store.set('self:'+e.target.dataset.self,e.target.checked);
+});
+document.addEventListener('click',e=>{
+  const b=e.target.closest('[data-reveal]');if(!b)return;
+  const id=b.dataset.reveal;document.getElementById('ans-'+id).hidden=false;b.hidden=true;
+  Store.set('rev:'+id,true);if(b.dataset.sec)mark(b.dataset.sec,id);
+});
+
+/* ---------- starter ---------- */
+const TOPICS=[['cycle','The four-stroke cycle'],['comp','What each core component does'],['sys','Lubrication, cooling, fuel and exhaust systems'],['mods','Modifications and their knock-on effects'],['fail','How engines fail through misuse or poor maintenance'],['maths','Capacity and compression ratio calculations']];
+function sliders(pre){
+  return TOPICS.map(([k,n])=>{const v=Store.get(pre+':'+k,3);
+    return `<label class="slide"><span>${n}</span><input type="range" min="1" max="5" step="1" value="${v}" data-conf="${pre}:${k}" aria-label="${esc(n)}"><output>${v}</output></label>`;}).join('');
+}
+document.addEventListener('input',e=>{
+  if(e.target.matches('input[data-conf]')){
+    const k=e.target.dataset.conf;Store.set(k,+e.target.value);Store.set('set:'+k,true);e.target.nextElementSibling.textContent=e.target.value;
+  }
+});
+function buildStart(){
+  $('#startPrompts').innerHTML=
+    ta('start-parts','Starter: engine parts I can name','<b>Two minutes, no phones.</b> Name every engine part you can. Aim for 15. Write them below or sketch an engine on paper and label it.',4)+
+    ta('start-knock','Starter: the knocking engine','A customer says <i>"my engine has started knocking."</i> List three possible causes and two questions you would ask them.',4);
+  $('#preSlides').innerHTML=sliders('pre');
+  $('#savePre').addEventListener('click',()=>{$('#preMsg').hidden=false;mark('start','pre');});
+}
+
+/* ---------- four-stroke animation ---------- */
+function buildCycle(){
+  const R=40,L=120,CX=180,CY=350;
+  const names=['Intake','Compression','Power','Exhaust'];
+  const dirs=['Moving down','Moving up','Moving down','Moving up'];
+  const cols=['#2C6EA6','#E3A21A','#E4572E','#7A8794'];
+  let th=30,playing=false,last=0;
+  const pG=$('#pistonG'),rod=$('#rod'),arm=$('#arm'),cpin=$('#cpin'),cw=$('#cw'),gas=$('#gas'),vIn=$('#valveIn'),vEx=$('#valveEx'),spark=$('#spark'),pIn=$('#portIn'),pEx=$('#portEx');
+  const slider=$('#crankSlider'),predict=$('#predict');
+  function draw(){
+    th=((th%720)+720)%720;
+    const a=(th%360)*Math.PI/180;
+    const yPin=CY-(R*Math.cos(a)+Math.sqrt(L*L-R*R*Math.sin(a)**2));
+    const dy=yPin-200;
+    pG.setAttribute('transform',`translate(0 ${dy})`);
+    const px=CX+R*Math.sin(a),py=CY-R*Math.cos(a);
+    rod.setAttribute('y1',yPin);rod.setAttribute('x2',px);rod.setAttribute('y2',py);
+    arm.setAttribute('x2',px);arm.setAttribute('y2',py);
+    cpin.setAttribute('cx',px);cpin.setAttribute('cy',py);
+    cw.setAttribute('cx',CX-26*Math.sin(a));cw.setAttribute('cy',CY+26*Math.cos(a));
+    const top=165+dy;gas.setAttribute('height',Math.max(0,top-150));
+    const s=Math.floor(th/180)%4;
+    gas.setAttribute('fill',cols[s]);gas.setAttribute('opacity',s===2?.75:s===1?.6:.45);
+    const inL=th<180?Math.sin(Math.PI*th/180):0;
+    const exL=th>=540?Math.sin(Math.PI*(th-540)/180):0;
+    vIn.setAttribute('transform',`translate(148 ${12*inL})`);
+    vEx.setAttribute('transform',`translate(212 ${12*exL})`);
+    pIn.setAttribute('opacity',inL>.02?.45:0);pEx.setAttribute('opacity',exL>.02?.45:0);
+    spark.setAttribute('opacity',(th>=345&&th<=380)?1:0);
+    const hide=predict.checked;
+    $('#rStroke').textContent=hide?'What stroke is this?':names[s];
+    $('#rCrank').innerHTML=Math.round(th)+'&deg;';
+    $('#rCam').innerHTML=Math.round(th/2)+'&deg;';
+    $('#rPiston').textContent=dirs[s];
+    $('#rValves').textContent=hide?'Predict first':(inL>.02?'Inlet open':exL>.02?'Exhaust open':'Both closed');
+    slider.value=Math.floor(th);
+  }
+  function tick(t){
+    if(!playing)return;
+    const dt=Math.min(.05,(t-last)/1000);last=t;
+    th+=dt*(+$('#speedSel').value);draw();requestAnimationFrame(tick);
+  }
+  $('#playBtn').addEventListener('click',()=>{
+    playing=!playing;$('#playBtn').textContent=playing?'Pause':'Play';
+    if(playing){last=performance.now();requestAnimationFrame(tick);}
+  });
+  $('#nextBtn').addEventListener('click',()=>{th=((Math.floor(th/180)+1)%4)*180+90;draw();});
+  slider.addEventListener('input',()=>{th=+slider.value;draw();});
+  predict.addEventListener('change',draw);
+  draw();
+
+  /* table */
+  const rows=[
+    ['Intake','Down','Open','Closed','Charge drawn in'],
+    ['Compression','Up','Closed','Closed','Charge squeezed'],
+    ['Power','Down','Closed','Closed','Gas burns and expands'],
+    ['Exhaust','Up','Closed','Open','Burnt gas pushed out']
+  ];
+  const evs=['Charge drawn in','Charge squeezed','Gas burns and expands','Burnt gas pushed out'];
+  const sel=(opts,key)=>`<select data-k="${key}" aria-label="${key}"><option value="">Choose...</option>${opts.map(o=>`<option>${o}</option>`).join('')}</select>`;
+  $('#cycleTable').innerHTML='<thead><tr><th>Stroke</th><th>Piston moving</th><th>Inlet valve</th><th>Exhaust valve</th><th>What is happening</th></tr></thead><tbody>'+
+    rows.map((r,i)=>`<tr><td><b>${r[0]}</b></td><td>${sel(['Up','Down'],i+'-1')}</td><td>${sel(['Open','Closed'],i+'-2')}</td><td>${sel(['Open','Closed'],i+'-3')}</td><td>${sel(evs,i+'-4')}</td></tr>`).join('')+'</tbody>';
+  $('#checkCycle').addEventListener('click',()=>{
+    let ok=0,blank=0;
+    $$('#cycleTable select').forEach(s=>{
+      const [i,c]=s.dataset.k.split('-');const right=rows[i][c];
+      s.classList.remove('ok','no');
+      if(!s.value){blank++;return;}
+      if(s.value===right){ok++;s.classList.add('ok');}else s.classList.add('no');
+    });
+    const m=$('#cycleMsg');
+    if(blank){m.innerHTML=`<div class="msg info">Fill in every box first (${blank} left).</div>`;return;}
+    if(ok===16){m.innerHTML='<div class="msg good">All 16 correct. In a real engine the valves overlap a little: the inlet opens just before TDC and the exhaust closes just after it, which helps gas flow. The table is the simplified model.</div>';mark('cycle','table');}
+    else m.innerHTML=`<div class="msg bad">${ok} of 16 correct. Check the red boxes against the animation: watch the valves and the piston direction on each stroke.</div>`;
+  });
+  $('#resetCycle').addEventListener('click',()=>{$$('#cycleTable select').forEach(s=>{s.value='';s.classList.remove('ok','no');});$('#cycleMsg').innerHTML='';});
+
+  $('#cycleThinks').innerHTML=
+   think({id:'cy-cam',sec:'cycle',label:'Cycle: why does the cam turn at half speed?',
+     prompt:'The crankshaft turns twice for every one turn of the camshaft. Why? What would go wrong if the cam turned at crank speed?',
+     answer:'<p>Each valve only needs to open <b>once per cycle</b>, and a cycle is four strokes, which is <b>two crank revolutions</b>. So the cam is driven at half crank speed (a 2:1 ratio, set by the sprocket sizes on the timing belt or chain).</p><p>At crank speed the valves would open every revolution, which means in the wrong strokes. The engine would not run, and valves could hit pistons.</p>'})+
+   think({id:'cy-flywheel',sec:'cycle',label:'Cycle: one power stroke in four',
+     prompt:'Only one stroke in four makes power. How does a real engine keep turning smoothly through the other three?',
+     answer:'<p>Two things. The <b>flywheel</b> stores energy during the power stroke and gives it back during the others. And <b>multi-cylinder engines</b> overlap their power strokes: a four-cylinder has a power stroke every 180&deg; of crank rotation, so there is always one cylinder pushing.</p>'})+
+   think({id:'cy-diesel',sec:'cycle',label:'Cycle: how does a diesel ignite without a spark plug?',
+     prompt:'Diesel engines have no spark plugs. How does the fuel ignite? Think about what compressing a gas does to its temperature.',
+     answer:'<p>A diesel compresses <b>air only</b>, to a very high ratio. Compressing air heats it far above the fuel\'s ignition temperature. Fuel is sprayed in near TDC at very high pressure and ignites on contact. Glow plugs only help cold starts.</p><div class="tblwrap"><table><thead><tr><th></th><th>Petrol (spark ignition)</th><th>Diesel (compression ignition)</th></tr></thead><tbody><tr><td>Drawn in</td><td>Air (port injection also draws fuel)</td><td>Air only</td></tr><tr><td>Typical compression ratio</td><td>About 9:1 to 12:1</td><td>About 16:1 to 23:1</td></tr><tr><td>Ignition</td><td>Spark plug</td><td>Heat of compression</td></tr><tr><td>Load control</td><td>Throttle restricts air</td><td>Amount of fuel injected</td></tr></tbody></table></div>'});
+  hydrate();
+}
+
+/* ---------- content: components ---------- */
+const C=(title,tag,job,built,fail,mod)=>({title,tag,f:[['job','Job',job],['built','Built from, designed like',built],['fail','If neglected or misused',fail],['mod','Modifications and the catch',mod]]});
+const COMPONENTS=[
+C('Cylinder block','Structure',
+ 'The main structure of the engine. It holds the cylinders the pistons slide in, supports the crankshaft in its main bearings, and carries the coolant jackets and oil galleries.',
+ 'Cast iron (strong, wears well, heavy) or aluminium alloy with iron liners or coated bores (light, sheds heat well). The deck is machined flat and the bores are honed with a crosshatch pattern that holds oil.',
+ 'Overheating can crack or distort the block. Coolant without antifreeze can freeze and split it. Dirty air or oil scores the bores, causing blow-by and oil burning. A distorted deck stops the head gasket sealing.',
+ 'Boring out for bigger pistons, or sleeving, raises capacity. Strengthened blocks, main-bearing girdles and closed-deck designs cope with high power. <b>The catch:</b> thinner cylinder walls are weaker and cooling between the bores gets worse.'),
+C('Cylinder head','Structure',
+ 'Closes the top of the cylinders to form the combustion chambers. It houses the valves, ports, spark plugs or injectors and, in overhead-cam engines, the camshaft.',
+ 'Mostly aluminium alloy for low weight and good heat transfer. Valve seats and guides are harder inserts. The ports are shaped so gas flows smoothly.',
+ 'Overheating warps or cracks the head and breaks the gasket seal. Aluminium heads distort easily if bolts are removed hot or retightened out of sequence or to the wrong torque. The result is lost coolant or lost compression.',
+ 'Porting and polishing improve flow, larger valves help, and skimming the face shrinks the combustion chamber to raise compression ratio. <b>The catch:</b> skimming changes cam timing on belt-driven engines and raises detonation risk. Poor porting can slow the gas down and lose low-rpm torque.'),
+C('Head gasket','Structure',
+ 'Seals the joint between block and head. It holds in combustion pressure while keeping coolant and oil in their own passages: three jobs in one thin layer.',
+ 'Multi-layer steel (MLS) on most modern engines. Raised beads and fire rings compress to make the seal.',
+ 'Overheating, detonation or a warped head causes failure. Signs: white exhaust smoke, coolant loss with no visible leak, bubbles in the expansion tank, a milky film under the oil filler cap, overheating and misfires. Driving on contaminates the oil and wrecks the bearings.',
+ 'A thicker or thinner gasket adjusts compression ratio. Uprated MLS gaskets, and head studs instead of bolts, suit high-boost engines. <b>The catch:</b> gasket thickness also changes squish and piston-to-valve clearance.'),
+C('Piston and gudgeon pin','Moving parts',
+ 'The piston takes the force of combustion and passes it through the gudgeon pin and connecting rod to the crankshaft. On the way up it also compresses the charge.',
+ 'Aluminium alloy, so it is light enough to change direction thousands of times a minute. Cast for standard engines, forged for strength. The skirt guides it in the bore, and it is slightly oval and tapered to allow for uneven heating.',
+ 'Detonation can melt or crack the crown. Oil starvation or overheating scuffs and seizes the piston in the bore. After a rebuild, too little clearance seizes it and too much causes piston slap.',
+ 'Forged pistons take higher loads. Domed or dished crowns change compression ratio, and lighter pistons allow higher revs. <b>The catch:</b> forged pistons expand more when hot, so they run looser and can be noisy when cold.'),
+C('Piston rings','Moving parts',
+ 'Three jobs: seal the combustion gases, scrape excess oil off the bore, and carry heat from the piston to the cylinder wall. Typically a top compression ring, a scraper ring and an oil control ring.',
+ 'Cast iron or steel, often coated (chrome, moly or nitride). Each ring is fitted with a small end gap that closes as it heats up.',
+ 'Worn or stuck (coked) rings let gas blow past into the crankcase and oil burn in the chamber: blue smoke, high oil use, low compression. Old or poor oil and lots of short journeys speed up carbon build-up in the ring grooves.',
+ 'Thinner low-tension rings cut friction. Gaps are set wider on turbo and supercharged engines. <b>The catch:</b> too wide a gap loses sealing, too narrow and the ends butt together and score the bore.'),
+C('Connecting rod','Moving parts',
+ 'Links the piston to the crankshaft and turns straight-line motion into rotation. It takes huge compression and tension loads on every cycle.',
+ 'Forged steel, usually I-beam or H-beam section. The big end splits so it can clamp round the crank journal, held by bolts that must be torqued correctly.',
+ 'Oil starvation spins the big-end bearing, causing a deep knock and sometimes a rod through the block. Hydrolock or severe over-revving bends or snaps rods. Reusing stretch bolts or using the wrong torque also causes failure.',
+ 'Forged or billet steel (even titanium) rods suit high-power builds. <b>The catch:</b> cost, and they only raise the limit. Bearings, oil supply and the crank become the next weak link.'),
+C('Crankshaft','Moving parts',
+ 'Turns the push of the pistons into rotation and delivers it to the flywheel. It also drives the timing belt or chain and oil pump, and carries pulleys for the ancillaries.',
+ 'Forged steel or cast iron, with main journals (supported in the block) and crankpins (where the rods attach). Counterweights balance the moving mass, and a harmonic damper pulley absorbs torsional vibration.',
+ 'Oil starvation wears the journals and dirt scores them. A failed damper or sustained over-revving can break the crank. A bent crank after hydrolock or a crash causes vibration and bearing failure.',
+ 'A longer-stroke crank (a "stroker") raises capacity and torque. Lightened or knife-edged cranks respond faster. <b>The catch:</b> more stroke means higher piston speed and side load, and may need block and piston changes.'),
+C('Main and big-end bearings','Moving parts',
+ 'Thin, replaceable shells that let the crankshaft turn on a pressurised film of oil instead of metal on metal.',
+ 'Steel backing with soft layers (such as aluminium-tin or copper-lead) that tolerate small particles. Tags stop them spinning, and oil clearances are measured in hundredths of a millimetre.',
+ 'Run dry, with dirty oil, the wrong viscosity or low oil pressure, they wear through in minutes. Dirt at assembly or the wrong torque changes the clearance. Classic signs: a rumble or knock from the bottom end and falling oil pressure.',
+ 'Race bearings (harder, with different clearances) cope with extreme loads. <b>The catch:</b> they are less forgiving of cold starts and short journeys.'),
+C('Flywheel','Moving parts',
+ 'Stores rotational energy to carry the engine smoothly between power strokes. It also provides the friction face for the clutch and the ring gear for the starter motor. Dual-mass flywheels damp vibration too.',
+ 'A heavy cast iron or steel disc with a shrunk-on ring gear. A dual-mass flywheel has two masses linked by springs.',
+ 'Clutch slip overheats it, causing heat spots, cracks and judder. Worn ring-gear teeth stop the engine starting. A worn dual-mass flywheel rattles on start-up, shudders and is expensive to replace.',
+ 'A lightened flywheel lets the engine rev up and down faster. <b>The catch:</b> a rougher idle, easier stalling and more drivetrain shock. Swapping a dual-mass for a solid flywheel adds noise and transmission wear.'),
+C('Camshaft','Valve train',
+ 'Opens the valves at the right time, by the right amount and for the right length of time. It turns at half crankshaft speed, and its lobes push on followers, tappets or rockers.',
+ 'Hardened steel or chilled cast iron lobes with machined profiles, running in bearings fed by oil. Variable valve timing (VVT) systems shift the cam phasing using oil pressure.',
+ 'Low, wrong or dirty oil wears the lobes, so lift and power drop. Incorrect timing after a belt change upsets power and can let valves hit pistons. Sludge blocks VVT solenoids.',
+ 'Performance cams with more lift and duration help high-rpm power. <b>The catch:</b> a lumpy idle, less low-rpm torque, worse economy and emissions, and a need for uprated springs and an ECU map to match.'),
+C('Valves and springs','Valve train',
+ 'Inlet valves let the charge in and exhaust valves let burnt gas out. Both must seal the chamber during compression and power. The springs close them and keep the followers in contact with the cam.',
+ 'Exhaust valves run much hotter (often 700&deg;C or more), so they use heat-resistant stainless steel, sometimes with sodium-filled stems. Seats are hardened inserts. Hydraulic tappets or shims set the valve clearance.',
+ 'Too little valve clearance stops a valve closing fully, so it burns, causing lost compression and misfire. Weak springs cause valve float at high rpm. Lean running also burns valves. Bent valves follow a timing failure.',
+ 'Larger or lighter valves, stiffer springs and titanium retainers all appear in tuned engines. <b>The catch:</b> stiffer springs wear the cam and followers faster, and bigger valves need port work to be worth fitting.'),
+C('Timing belt or chain','Valve train',
+ 'Keeps the camshaft turning in perfect step with the crankshaft at a 2:1 ratio, so the valves open and close at exactly the right piston positions.',
+ 'A reinforced rubber belt (quiet, light, replaced by interval) or a steel chain (longer life, runs in engine oil, but can stretch), plus tensioners, idlers and guides.',
+ 'A belt past its interval can snap. On an <b>interference engine</b> the pistons and open valves occupy the same space and collide, giving bent valves and damaged pistons or head. A seized belt-driven water pump can take the belt with it. Stretched chains and failed tensioners rattle, then jump a tooth.',
+ 'Adjustable cam pulleys allow fine timing changes, and uprated tensioners and chains suit higher revs. <b>The catch:</b> a wrong setting can cause valve-to-piston contact, and service intervals may shorten.'),
+C('Sump and oil pump','Structure',
+ 'The sump stores and cools the oil. The pump (driven by the crank or a chain) draws oil through a strainer and sends it under pressure through the filter and galleries to the bearings, cam and piston-cooling jets.',
+ 'A pressed steel or cast aluminium sump with baffles, and a gear or rotor pump. A pressure relief valve protects the filter, and an oil pressure switch warns of low pressure.',
+ 'Low oil level or a blocked strainer means starvation: the warning light, then rapid bearing damage. A sump holed by debris or a speed bump leaks. Skipped oil changes let sludge block the strainer.',
+ 'Baffled or deeper sumps, high-volume pumps, oil coolers, or dry-sump systems for racing and hard cornering. <b>The catch:</b> cost, complexity, ground clearance and more oil to look after.')
+];
+const S=(title,job,parts,fail,mod)=>({title,tag:'System',f:[['job','Job',job],['built','Key parts',parts],['fail','If neglected or misused',fail],['mod','Modifications and the catch',mod]]});
+const SYSTEMS=[
+S('Lubrication','Reduce friction, carry heat away, clean the engine, help seal the rings and protect against corrosion.',
+  'Sump, pump, strainer, filter, oil galleries, pressure relief valve, pressure switch, and sometimes an oil cooler.',
+  'Old oil loses viscosity and additives and fills with soot, fuel and water. Sludge blocks the strainer. A clogged filter opens its bypass valve and sends unfiltered oil to the bearings. The wrong specification can block a DPF with ash or upset VVT.',
+  'Full synthetic oil, an oil cooler, or a baffled sump. <b>The catch:</b> a thinner or "racing" oil that suits a tuned engine may not protect a standard one on cold starts.'),
+S('Cooling','Remove the heat that does not become power (roughly a third of the fuel energy) and hold the engine at its working temperature, around 90&deg;C.',
+  'Radiator, water pump, thermostat, coolant, fans, hoses, expansion tank with pressure cap, and the heater matrix.',
+  'Old coolant loses its corrosion inhibitors. A thermostat stuck closed causes overheating, which can warp the head and blow the gasket. Stuck open, the engine warms slowly, wastes fuel and wears faster. Low coolant causes hot spots and detonation.',
+  'Larger radiators, uprated fans, oil coolers and lower-temperature thermostats. <b>The catch:</b> run too cool and the engine is inefficient, and the ECU may enrich the mixture.'),
+S('Air and fuel','Deliver the right amount of clean air and fuel for the load, and (on forced induction engines) pressurise the air.',
+  'Air filter, air flow or pressure sensor, throttle (petrol), turbo and intercooler if fitted, fuel pump, filter, rail and injectors.',
+  'A blocked filter chokes the engine. Dirty injectors spray badly and cause misfires. Water or poor-quality fuel can wreck a high-pressure diesel pump. Running lean is the dangerous one: it burns valves and pistons.',
+  'Induction kits, larger injectors, uprated pumps and remaps. <b>The catch:</b> more air needs more fuel, and the ECU must be mapped to match or the engine runs lean.'),
+S('Ignition and combustion','Start combustion at exactly the right moment. Petrol engines use a spark; diesels rely on compression and use glow plugs only to help cold starts.',
+  'Spark plugs, coils and ECU timing control (petrol). Glow plugs and high-pressure injectors (diesel).',
+  'Worn plugs or weak coils cause misfires and wasted fuel, and unburnt fuel can overheat and ruin the catalytic converter. A plug of the wrong heat range can cause pre-ignition and piston damage.',
+  'Colder plugs and altered ignition timing on tuned engines. <b>The catch:</b> advancing timing makes power but moves the engine closer to detonation.'),
+S('Exhaust and emissions','Carry burnt gas away, quieten it, and clean it before it leaves the car.',
+  'Manifold, catalytic converter, lambda sensors, diesel particulate filter (DPF), EGR valve and silencers.',
+  'Misfires and oil burning block the catalyst. Short journeys block a DPF. Soot sticks the EGR valve. A blocked exhaust causes back-pressure, power loss and overheating.',
+  'Free-flow exhausts and larger bores add sound and a little power. <b>The catch:</b> removing a catalyst or DPF is illegal for road use and an MOT failure, and very low back-pressure can cost low-rpm torque.')
+];
+const M=(title,tag,how,effect,knock,legal)=>({title,tag,f:[['job','How it works',how],['built','Typical effect',effect],['fail','Knock-on effects',knock],['mod','Legal and practical (UK)',legal]]});
+const MODS=[
+M('ECU remap','Software',
+ 'The ECU holds maps that decide fuel quantity, ignition timing and, on turbo engines, boost for every load and speed. A remap rewrites them, usually with more fuel, more ignition advance and higher boost.',
+ 'Turbo petrol and diesel engines often gain 15 to 30% power and a lot of torque. Naturally aspirated engines gain very little.',
+ 'More cylinder pressure and heat on everything: pistons, rings, head gasket, clutch, turbo and fuel system. A poor remap that over-advances timing or runs lean causes detonation and holed pistons. The factory safety margin is what the remap spends.',
+ 'Tell your insurer: an undeclared remap can void a claim. The car must still pass MOT emissions, and the manufacturer warranty may be affected. A reputable tuner can show dyno results and knock monitoring.'),
+M('Induction and exhaust','Bolt-on',
+ 'A free-flowing intake and a lower-restriction exhaust cut the effort the engine spends pumping air in and gas out.',
+ 'Small gains on their own (a few percent), a louder note and sometimes sharper throttle response. Bigger gains when paired with cam, head work or a remap.',
+ 'Warm engine-bay air or a poor filter can lose power and let dirt in, which wears bores. A low-mounted intake raises hydrolock risk. Removing catalysts changes emissions, and the ECU must adapt to the new airflow.',
+ 'Road cars must meet noise limits and keep their emissions equipment. Removing a catalytic converter or DPF is an MOT failure and illegal for road use.'),
+M('Turbocharger','Forced induction',
+ 'Exhaust gas spins a turbine that drives a compressor, pushing extra air into the cylinders. More air plus more fuel gives more power from the same capacity.',
+ 'Large gains: often 30 to 100% more power depending on boost, with strong torque if the turbo is matched well. An oversized turbo adds lag.',
+ 'Much higher cylinder pressure and temperature. Expect to need: a suitable compression ratio and stronger internals, more fuel (injectors, pump), an intercooler, a stronger clutch, boost control, and better cooling and oil supply. Turbo bearings spin at over 100,000 rpm and depend on clean oil; shutting down hot can cook the oil.',
+ 'Declare it to your insurer. Check emissions and noise at MOT. A big power jump demands that brakes, tyres and suspension are up to the job.'),
+M('Supercharger','Forced induction',
+ 'A compressor driven by a belt from the crankshaft forces extra air into the engine. It does not need exhaust gas, so there is no lag.',
+ 'Instant response and big gains (often 30 to 50%), strongest low down the rev range.',
+ 'It takes engine power to drive, and heats the intake air. As with a turbo: more fuel, a cooled charge, stronger internals, and extra load on the head gasket, clutch and the front of the crank.',
+ 'As for turbo: insurance declaration, MOT emissions, noise limits.'),
+M('Cams and head work','Engine internals',
+ 'A camshaft with more lift and duration holds the valves open further and longer. Porting and larger valves improve gas flow. The engine breathes better at high rpm.',
+ 'More peak power at high rpm, but usually less torque low down and a rougher idle.',
+ 'Needs matching valve springs and an ECU map, and sometimes new intake and exhaust. Too much lift risks valve-to-piston contact, so timing must be set carefully. Economy and emissions usually worsen, and idle vacuum for the brake servo can fall.',
+ 'Rough idle and high hydrocarbons can fail an MOT emissions test. Declare to the insurer.'),
+M('Capacity increase','Engine internals',
+ 'Boring the cylinders for bigger pistons, or fitting a longer-stroke crank, raises swept volume. More air and fuel are burnt on every cycle.',
+ 'Power and torque rise roughly in line with capacity.',
+ 'Bore: thinner cylinder walls, limited by the block casting and liners, with poorer cooling between bores. Stroke: higher piston speed, more side load on pistons, more stress on rods, and possible block clearance work. Balance must be rechecked.',
+ 'Tell your insurer and DVLA if the engine capacity changes. It can alter the tax class and insurance group.'),
+M('Compression ratio change','Engine internals',
+ 'Skimming the head, a thinner gasket or domed pistons shrink the clearance volume and raise the ratio. Dished pistons or a thicker gasket lower it, which is how boosted engines make room for pressure.',
+ 'A higher ratio burns more efficiently and makes more power per unit of fuel. A lower ratio allows more boost.',
+ 'Higher compression raises cylinder temperature, so the engine needs higher-octane fuel or less ignition advance or it will detonate. Skimming also reduces valve-to-piston clearance and shifts belt and cam geometry.',
+ 'You may need premium-grade fuel permanently. Declare the change to your insurer.'),
+M('Cooling and oil upgrades','Support',
+ 'A larger radiator, uprated fans, an oil cooler, a higher-flow oil pump, and a baffled or dry sump.',
+ 'No power gain by themselves. They protect the engine so the gains last, by keeping temperature and oil pressure steady under sustained load.',
+ 'More weight, plumbing and leak points, and more to maintain. A thermostat set too cool slows warm-up, and an oil cooler leak can empty the sump quickly.',
+ 'Usually no legal issue, but it must be fitted safely and securely. Declare visible changes to the insurer.')
+];
+
+/* ---------- render cards ---------- */
+const PROMPTS={
+ comp:'What does this part do? Then predict two things: what happens if it fails, wears or isn\'t maintained, and how could someone modify it for more power, and what\'s the catch?',
+ sys:'List the main parts of this system. What would you check at a service, and what goes wrong if it\'s skipped?',
+ mod:'What does this change inside the engine? Predict the gain, then name the weakest link it exposes and one other thing that must change with it.'
+};
+function renderCards(list,host,sec,prefix,prompt){
+  host.innerHTML=list.map((c,i)=>{const id=prefix+i;
+    return `<details class="card" data-cat="${esc(c.tag)}"><summary><span>${c.title}</span><span class="chip">${c.tag}</span></summary><div class="card-body">${
+      think({id,sec,label:c.title+': my prediction',prompt,
+        answer:facts(c.f)+`<label class="self"><input type="checkbox" data-self="${id}"> I could explain this to someone else</label>`})
+    }</div></details>`;}).join('');
+}
+function buildCards(){
+  renderCards(COMPONENTS,$('#compList'),'components','comp-',PROMPTS.comp);
+  renderCards(SYSTEMS,$('#sysList'),'systems','sys-',PROMPTS.sys);
+  renderCards(MODS,$('#modList'),'mods','mod-',PROMPTS.mod);
+  $$('.pill').forEach(p=>p.addEventListener('click',()=>{
+    $$('.pill').forEach(x=>x.setAttribute('aria-pressed',x===p));
+    const f=p.dataset.filter;
+    $$('#compList details').forEach(d=>d.hidden=!(f==='All'||d.dataset.cat===f));
+  }));
+  $('#breakPrompt').innerHTML=ta('break-recall','Break: recall from memory','Write down five engine components, what each one does, and one warning sign when it fails. No peeking.',5);
+}
+
+/* ---------- weakest-link ---------- */
+const WL=[
+ ['Fuel delivery: injector and fuel pump capacity',true,'More air needs more fuel. A lean mixture burns hot and melts pistons and burns valves.'],
+ ['Fit a new radio and speakers',false,''],
+ ['Engine management: a matched map with safe boost and ignition settings',true,'Without it the ECU cannot control boost or timing and will run into detonation.'],
+ ['Pistons, rings and compression ratio suited to boost',true,'Standard internals are built for naturally aspirated loads. Boost may need a lower compression ratio and stronger parts.'],
+ ['Head gasket and head fasteners',true,'Higher cylinder pressure tries to lift the head. A standard gasket can blow.'],
+ ['Fit larger alloy wheels for the look',false,''],
+ ['Cooling system condition and capacity, plus an intercooler',true,'More power means more heat, and compressed air gets hot. Hot intake air increases the knock risk.'],
+ ['Oil condition, oil pressure and a proper turbo oil feed and return',true,'Turbo bearings need clean, pressurised oil. Poor oil kills the turbo and the engine.'],
+ ['Clutch and gearbox torque limits',true,'A standard clutch will slip, and transmissions have torque limits.'],
+ ['Brakes, tyres and suspension',true,'Stopping and steering must keep up with the new performance.'],
+ ['Add a racing stripe decal',false,''],
+ ['Compression test and full condition check of the existing 110,000-mile engine',true,'Worn rings or a tired gasket will fail first. Find out the starting condition before adding stress.'],
+ ['Insurance declaration, MOT emissions and noise',true,'Undeclared modifications can void insurance, and emissions equipment must still pass.']
+];
+function buildWL(){
+  $('#wlList').innerHTML=WL.map((w,i)=>`<label data-i="${i}"><input type="checkbox" value="${i}"><span>${w[0]}<small hidden></small></span></label>`).join('');
+  $('#wlCheck').addEventListener('click',()=>{
+    let good=0,miss=0,wrong=0;
+    $$('#wlList label').forEach(l=>{
+      const w=WL[+l.dataset.i];const on=l.querySelector('input').checked;const sm=l.querySelector('small');
+      l.classList.remove('right','miss','wrong');sm.hidden=true;
+      if(w[1]&&on){good++;l.classList.add('right');sm.textContent=w[2];sm.hidden=false;}
+      else if(w[1]&&!on){miss++;l.classList.add('miss');sm.textContent='Missed: '+w[2];sm.hidden=false;}
+      else if(!w[1]&&on){wrong++;l.classList.add('wrong');sm.textContent='This does nothing for the engine\'s ability to survive the power.';sm.hidden=false;}
+    });
+    const total=WL.filter(w=>w[1]).length;
+    $('#wlMsg').innerHTML=`<div class="msg ${miss||wrong?'bad':'good'}">${good} of ${total} checks found${wrong?`, ${wrong} unnecessary item${wrong>1?'s':''} ticked`:''}. ${miss?'Amber items were missed. Read the reasons: each one is a place the engine will fail first.':'Nothing missed. That is the discipline that keeps customers\' engines alive.'}</div>`;
+    mark('mods','weakest');
+  });
+}
+
+/* ---------- failure cases ---------- */
+const CASES=[
+{id:'f1',title:'The disappearing coolant',
+ scenario:'A 7-year-old petrol hatchback arrives running hot. The owner has been topping up coolant every few days but there are no puddles under the car. White smoke comes from the exhaust when warm, and there is a pale, milky film under the oil filler cap.',
+ q:'What is the most likely fault?',o:['Blown head gasket','Worn piston rings','Failed oil pump','Blocked air filter'],a:0,
+ chain:['Overheating or detonation distorts the head or overloads the gasket.','Coolant leaks into a cylinder and burns off as white smoke, so none shows on the ground.','Combustion gas pressurises the cooling system and forces coolant out. Coolant can also mix into the oil, making it milky.','Contaminated oil cannot protect the bearings. Driving on can destroy the engine.'],
+ prevent:'Fix coolant leaks early, change coolant on schedule, make sure the thermostat and fans work, and stop when the temperature gauge climbs. A gasket is cheap compared with a new engine.'},
+{id:'f2',title:'The knock on roundabouts',
+ scenario:'An 11-year-old petrol van has been "a bit thirsty for oil" for months. The oil light flickers on roundabouts and the driver ignored it. Now there is a deep knock from the bottom of the engine that gets worse with revs.',
+ q:'What has most likely failed?',o:['Big-end bearings, from oil starvation','Valve clearance slightly too large','A fouled spark plug','A worn clutch'],a:0,
+ chain:['Oil level drops until the pump strainer sucks air on cornering.','Oil pressure falls and the bearing loses its oil film.','Metal touches metal: the bearing overheats and wipes, and the crank journal scores.','Rod clearance opens, causing a deep knock. If driven on, the rod can break and exit the block.'],
+ prevent:'Check the oil level regularly (every fuel stop for a thirsty engine), obey the oil warning light immediately, and service on time. Note that a large valve clearance gives a light top-end tick, not a deep bottom-end knock.'},
+{id:'f3',title:'The snapped belt',
+ scenario:'A 9-year-old family car is doing 60 mph when the engine suddenly cuts out with a metallic rattle. The timing belt was last changed at 55,000 miles and the car now has 98,000. The manufacturer\'s interval is 5 years or 60,000 miles.',
+ q:'On an interference engine, what damage would you expect?',o:['Bent valves and possibly damaged pistons','None. It just needs a new belt','A snapped crankshaft','A flat battery'],a:0,
+ chain:['The belt breaks. The crankshaft keeps turning, but the camshaft stops.','Some valves are left open.','The pistons keep moving and hit the open valves.','Valves bend and pistons or head can be damaged. The repair often costs more than the car is worth.'],
+ prevent:'Replace the belt and tensioners (and a belt-driven water pump) by the manufacturer\'s time or mileage, whichever comes first. Not every engine is interference, but you must check before gambling.'},
+{id:'f4',title:'The flooded road',
+ scenario:'A driver ploughs through a flooded road. The engine coughs and stalls. They turn the key to restart it. The starter spins briefly, then stops with a thud.',
+ q:'What has happened?',o:['Hydrolock: water in a cylinder cannot be compressed','Flat battery','Wrong engine oil','Worn flywheel ring gear'],a:0,
+ chain:['Water is sucked in through the air intake.','Liquid cannot be compressed, so the piston cannot finish its upward stroke.','The connecting rod takes the whole load and bends (or the piston or head fails).','Restarting makes it worse. The engine usually needs a rebuild.'],
+ prevent:'Do not drive through deep water. If the engine stalls in water, do not restart it. The garage should remove the plugs or injectors and turn the engine by hand to clear the water. Low-mounted intakes make this more likely.'},
+{id:'f5',title:'The cheap tune',
+ scenario:'A customer fits a cheap online remap and fills up with the cheapest fuel available. Under hard acceleration there is a metallic pinking noise, which they ignore. A month later the car misfires and loses power, and a compression test shows one cylinder with almost nothing.',
+ q:'What is the most likely cause?',o:['Detonation has damaged a piston','Normal carbon build-up, nothing to worry about','A flat spot on the camshaft','A weak starter motor'],a:0,
+ chain:['Aggressive ignition timing and low-octane fuel let part of the charge ignite on its own.','Two flame fronts collide, creating pressure spikes. That is the pinking sound.','The spikes and extra heat hammer the piston crown and ring lands.','The piston cracks or melts, the ring seal fails and compression is lost.'],
+ prevent:'Use the correct fuel octane, buy tuning from a reputable specialist who can show knock monitoring, and treat pinking as a stop-now warning.'},
+{id:'f6',title:'The school-run diesel',
+ scenario:'A modern diesel hatchback only does 3-mile school runs. The DPF warning light is on, the car has gone into limp mode, and the dipstick shows the oil level has risen above MAX.',
+ q:'What is going on?',o:['The DPF is blocked and fuel is diluting the oil','Head gasket leaking coolant into the oil','Timing belt has slipped a tooth','A cracked flywheel'],a:0,
+ chain:['Short cold trips never get the exhaust hot enough for the DPF to burn off its soot (regeneration).','Soot loads up and the ECU tries extra post-injection to raise the temperature.','Some of that fuel runs down the bores into the sump, thinning the oil and raising the level.','Thin oil protects the bearings less, and the blocked DPF causes limp mode.'],
+ prevent:'Regular longer runs at speed, the correct low-ash oil, on-time oil changes, and acting on the first DPF warning.'}
+];
+function buildCases(){
+  $('#caseList').innerHTML=CASES.map((c,ci)=>`<div class="case" id="${c.id}"><h3>${c.title}</h3><p>${c.scenario}</p><p><b>${c.q}</b></p>
+    <div class="opts">${c.o.map((t,i)=>`<button class="opt" data-c="${ci}" data-i="${i}">${t}</button>`).join('')}</div>
+    <div class="after" hidden>
+      <div class="fact fail"><h4>What happened, step by step</h4><ol>${c.chain.map(s=>`<li>${s}</li>`).join('')}</ol></div>
+      <div class="fact mod"><h4>How it could have been prevented</h4><p>${c.prevent}</p></div>
+      ${ta('case-'+c.id,c.title+': what I would tell the customer','Now explain this to the customer in plain English, in two or three sentences.',3)}
+    </div></div>`).join('');
+  CASES.forEach((c,ci)=>{const saved=Store.get('case:'+c.id,null);if(saved!==null)showCase(ci,saved,true);});
+  $$('.opt').forEach(b=>b.addEventListener('click',()=>{const ci=+b.dataset.c;if(Store.get('case:'+CASES[ci].id,null)!==null)return;showCase(ci,+b.dataset.i,false);}));
+  hydrate();
+}
+function showCase(ci,choice,silent){
+  const c=CASES[ci];const box=document.getElementById(c.id);
+  $$('.opt',box).forEach(b=>{b.disabled=true;const i=+b.dataset.i;if(i===c.a)b.classList.add('right');else if(i===choice)b.classList.add('wrong');});
+  $('.after',box).hidden=false;
+  if(!silent){Store.set('case:'+c.id,choice);mark('failures',c.id);}
+}
+
+/* ---------- maths ---------- */
+const CH=[
+ {id:'m1',q:'<b>Challenge 1.</b> A four-cylinder engine has a bore of 81 mm and a stroke of 77.4 mm. What is the total capacity in cc?',unit:'cc',ans:1595,tol:6,
+  w:'Swept volume per cylinder = &pi;/4 &times; 81&sup2; &times; 77.4 = 0.7854 &times; 6,561 &times; 77.4 &asymp; 398,800 mm&sup3; = 398.8 cc. Times 4 cylinders = about 1,595 cc: a "1.6".'},
+ {id:'m2',q:'<b>Challenge 2.</b> One cylinder has a swept volume of 450 cc and a clearance volume of 50 cc. What is the compression ratio? (Enter the first number, so 10:1 is 10.)',unit:': 1',ans:10,tol:.1,
+  w:'CR = (swept + clearance) &divide; clearance = (450 + 50) &divide; 50 = 10, so 10:1.'},
+ {id:'m3',q:'<b>Challenge 3.</b> The same engine has its head skimmed so the clearance volume drops from 50 cc to 45 cc. What is the new compression ratio?',unit:': 1',ans:11,tol:.1,
+  w:'CR = (450 + 45) &divide; 45 = 11, so 11:1. Skimming just 5 cc added a whole point of compression.'},
+ {id:'m4',q:'<b>Challenge 4.</b> The tuner fits a stroker crank to the Challenge 1 engine, taking the stroke from 77.4 mm to 86 mm (bore unchanged). What is the new total capacity in cc?',unit:'cc',ans:1773,tol:6,
+  w:'Swept = 0.7854 &times; 81&sup2; &times; 86 &asymp; 443,200 mm&sup3; = 443.2 cc per cylinder. Times 4 = about 1,773 cc, roughly 11% more than standard. Piston speed and side loading go up as well.'}
+];
+function buildMaths(){
+  const calc=()=>{
+    const b=+$('#cBore').value,s=+$('#cStroke').value,n=+$('#cCyl').value,c=+$('#cClr').value;
+    const sw=Math.PI/4*b*b*s/1000;
+    $('#oSwept').textContent=sw>0?sw.toFixed(1)+' cc':'-';
+    $('#oCap').textContent=sw>0&&n>0?Math.round(sw*n)+' cc':'-';
+    $('#oCR').textContent=sw>0&&c>0?((sw+c)/c).toFixed(1)+' : 1':'-';
+  };
+  $$('.calc input').forEach(i=>i.addEventListener('input',calc));calc();
+  $('#chalList').innerHTML=CH.map(c=>`<div class="chal" id="${c.id}"><p>${c.q}</p>
+    <div class="in"><input type="number" step="any" aria-label="Your answer"> <span>${c.unit}</span> <button class="btn small" data-check="${c.id}">Check</button> <button class="btn alt small" data-work="${c.id}">Show working</button></div>
+    <div class="fb"></div><div class="wk" hidden><div class="formula">${c.w}</div></div></div>`).join('');
+  $$('[data-check]').forEach(b=>b.addEventListener('click',()=>{
+    const c=CH.find(x=>x.id===b.dataset.check);const box=document.getElementById(c.id);
+    const v=parseFloat($('input',box).value);const fb=$('.fb',box);
+    if(isNaN(v)){fb.innerHTML='<div class="msg info">Type a number first.</div>';return;}
+    if(Math.abs(v-c.ans)<=c.tol){fb.innerHTML='<div class="msg good">Correct.</div>';mark('maths',c.id);}
+    else fb.innerHTML='<div class="msg bad">Not quite. Check your units (mm to cc: divide by 1,000) and try again, or open the working.</div>';
+  }));
+  $$('[data-work]').forEach(b=>b.addEventListener('click',()=>{const w=$('.wk',document.getElementById(b.dataset.work));w.hidden=!w.hidden;}));
+  $('#mathsThink').innerHTML=think({id:'maths-knock',sec:'',label:'Numbers: consequences of 10:1 to 11:1',
+    prompt:'Challenge 3 raised the compression ratio from 10:1 to 11:1 just by skimming the head. List every consequence you can think of for the engine and the owner.',
+    answer:'<ul><li><b>Fuel:</b> the engine may now need higher-octane fuel, or the ECU will pull timing and lose some of the gain.</li><li><b>Detonation risk:</b> more compression means higher temperature and pressure at the end of the stroke.</li><li><b>Clearances:</b> the piston-to-valve gap shrinks. Belt and cam geometry can shift on some engines.</li><li><b>Stress:</b> higher peak pressure loads the gasket, bearings and rods.</li><li><b>Paperwork:</b> insurer declaration, and the cost of premium fuel for ever after.</li></ul>'});
+  hydrate();
+}
+
+/* ---------- quiz ---------- */
+const TOPIC_NAMES={cycle:'Four-stroke cycle',comp:'Components',fail:'Failure',sys:'Systems',mods:'Modifications',maths:'Numbers'};
+const QUIZ=[
+ {t:'cycle',q:'Which stroke has both valves closed while the piston moves upwards?',o:['Intake','Compression','Power','Exhaust'],a:1,e:'On compression both valves are shut so the charge can be squeezed. On exhaust the piston also rises, but the exhaust valve is open.'},
+ {t:'cycle',q:'Compared with the crankshaft, how fast does the camshaft turn?',o:['The same speed','Half the speed','Twice the speed','A quarter of the speed'],a:1,e:'Each valve opens once every four strokes (two crank revolutions), so the cam turns once for every two crank turns.'},
+ {t:'cycle',q:'How is the fuel ignited in a diesel engine?',o:['By a spark plug','By the heat of compressing the air','By a pilot flame','By the starter motor'],a:1,e:'Only air is compressed, to around 16:1 to 23:1, so it gets hot enough to ignite the fuel injected near TDC. Glow plugs only help cold starts.'},
+ {t:'cycle',q:'How many crankshaft revolutions make one complete four-stroke cycle?',o:['One','Two','Four','Half'],a:1,e:'Four strokes of 180\u00B0 each is 720\u00B0, which is two revolutions.'},
+ {t:'comp',q:'What do piston rings do?',o:['Seal combustion gases only','Seal gases, control oil and carry heat to the cylinder wall','Connect the piston to the con rod','Time the valves'],a:1,e:'The rings seal combustion, scrape oil from the bore, and pass heat from the piston to the cylinder wall.'},
+ {t:'comp',q:'Which component converts the piston\'s up-and-down motion into rotation?',o:['Camshaft','Flywheel','Crankshaft','Oil pump'],a:2,e:'The connecting rod pushes on the crankpin, and the crankshaft turns that push into rotation.'},
+ {t:'fail',q:'Coolant loss with no visible leak, white exhaust smoke and a milky oil-filler cap point most strongly to:',o:['A failed head gasket','A worn clutch','A blocked fuel filter','Low tyre pressure'],a:0,e:'A gasket failure lets coolant into the cylinder and oil. Beware: a little milkiness alone, on a car used for short trips, can just be condensation, so look at the whole picture.'},
+ {t:'comp',q:'Why are exhaust valves made from heat-resistant materials?',o:['They sit in the hottest gas flow and can only shed heat through their seat and stem','They have to spin','They carry the spark','They are longer than inlet valves'],a:0,e:'Exhaust valves are in the path of burnt gas at very high temperature, so they need heat-resistant alloys and sometimes sodium-filled stems.'},
+ {t:'fail',q:'A timing belt snaps on an interference engine. What is the most likely result?',o:['Valves hit the pistons','The oil level rises','The coolant boils','The clutch slips'],a:0,e:'The camshaft stops with valves open while the crank keeps turning, so the pistons strike them.'},
+ {t:'comp',q:'What does the flywheel do?',o:['Pumps the oil','Opens the valves','Stores energy to smooth the power strokes, and carries the clutch face and starter ring gear','Cools the pistons'],a:2,e:'Its mass carries the engine between power strokes. It also provides the clutch friction surface and the starter ring gear.'},
+ {t:'sys',q:'A thermostat stuck closed will most likely cause:',o:['Overheating','Faster warm-up','Low oil pressure','Misfire at idle only'],a:0,e:'Coolant cannot reach the radiator, so temperature climbs until the head warps or the gasket fails.'},
+ {t:'sys',q:'Besides reducing friction, engine oil also:',o:['Cools, cleans and helps seal the piston rings','Raises the compression of the fuel','Controls the thermostat','Lowers the coolant temperature directly'],a:0,e:'Oil carries heat from hot spots, suspends contaminants for the filter to catch, and fills the tiny gap between rings and bore.'},
+ {t:'sys',q:'Which habit is most likely to block a diesel particulate filter?',o:['Regular short journeys','Long motorway runs','Using the correct oil','Servicing on time'],a:0,e:'Short trips never get the exhaust hot enough for the DPF to regenerate, so soot builds up.'},
+ {t:'mods',q:'Raising the compression ratio will generally:',o:['Increase efficiency and power but raise the detonation risk','Reduce power and fuel use','Only change the exhaust note','Lower the combustion temperature'],a:0,e:'More compression burns more efficiently but raises temperature and pressure, so the engine is closer to knock.'},
+ {t:'mods',q:'You turbocharge a standard naturally aspirated engine. Which set of checks matters most?',o:['Fuel supply, engine map, cooling, clutch and internal strength','Only the tailpipe size','Only the air filter','Nothing, the standard engine is designed for it'],a:0,e:'Boost raises cylinder pressure and heat everywhere, so the weakest link in the whole chain decides how long the engine survives.'},
+ {t:'mods',q:'A lightened flywheel typically gives:',o:['Quicker rev response but a rougher idle and easier stalling','A smoother idle and more low-rpm torque','Lower exhaust temperatures','A longer clutch life'],a:0,e:'Less rotating mass lets the engine change speed faster, but it also stores less energy to smooth the idle.'},
+ {t:'mods',q:'After fitting performance parts to a road car in the UK you should:',o:['Tell your insurer and check it still meets MOT emissions and noise rules','Do nothing, modifications are never checked','Remove the catalytic converter to pass the MOT','Wait until it fails the MOT'],a:0,e:'Undeclared modifications can void insurance, and removing emissions equipment is illegal for road use.'},
+ {t:'fail',q:'A deep knock from the bottom end with a flickering oil light most likely means:',o:['Worn big-end bearings from oil starvation','A loose air filter housing','A weak spark plug','A cracked exhaust manifold'],a:0,e:'Low oil pressure starves the bearings, which wipe out and open up clearance. Stop driving immediately.'},
+ {t:'maths',q:'A cylinder has a bore of 80 mm and a stroke of 90 mm. What is its swept volume?',o:['452 cc','226 cc','905 cc','565 cc'],a:0,e:'&pi;/4 &times; 80&sup2; &times; 90 = 452,400 mm&sup3; = 452 cc.'},
+ {t:'maths',q:'A cylinder has a swept volume of 500 cc and a clearance volume of 50 cc. What is the compression ratio?',o:['10:1','11:1','9:1','12:1'],a:1,e:'(500 + 50) &divide; 50 = 11, so 11:1.'}
+];
+const quiz={order:[],pos:0,score:0,missed:[],topic:{}};
+function startQuiz(idx){quiz.order=shuffle(idx.slice());quiz.pos=0;quiz.score=0;quiz.missed=[];quiz.topic={};renderQ();}
+function renderQ(){
+  const box=$('#quizBox');
+  if(quiz.pos>=quiz.order.length)return renderResult();
+  const qi=quiz.order[quiz.pos],q=QUIZ[qi];
+  const opts=shuffle(q.o.map((t,i)=>({t,c:i===q.a})));
+  box.innerHTML=`<div class="quizcard"><div class="qhead"><span>Question ${quiz.pos+1} of ${quiz.order.length}</span><span>Score ${quiz.score}</span></div>
+    <div class="qbar"><i style="width:${quiz.pos/quiz.order.length*100}%"></i></div>
+    <p class="qq">${q.q}</p>
+    <div class="opts">${opts.map((o,i)=>`<button class="opt" data-c="${o.c?1:0}">${o.t}</button>`).join('')}</div>
+    <div id="qfb"></div></div>`;
+  $$('.opt',box).forEach(b=>b.addEventListener('click',()=>{
+    const ok=b.dataset.c==='1';
+    $$('.opt',box).forEach(x=>{x.disabled=true;if(x.dataset.c==='1')x.classList.add('right');});
+    if(!ok)b.classList.add('wrong');
+    const t=quiz.topic[q.t]=quiz.topic[q.t]||{r:0,n:0};t.n++;
+    if(ok){quiz.score++;t.r++;}else quiz.missed.push(qi);
+    const last=quiz.pos+1>=quiz.order.length;
+    $('#qfb').innerHTML=`<div class="msg ${ok?'good':'bad'}">${ok?'Correct.':'Not quite.'} ${q.e}</div><div class="row"><button class="btn" id="qNext">${last?'See my results':'Next question'}</button></div>`;
+    $('#qNext').addEventListener('click',()=>{quiz.pos++;renderQ();});
+    $('#qNext').focus();
+  }));
+}
+function renderResult(){
+  const n=quiz.order.length,pc=Math.round(quiz.score/n*100);
+  const best=Math.max(Store.get('quizBest',0),pc);Store.set('quizBest',best);Store.set('quizLast',quiz.score+'/'+n+' ('+pc+'%)');
+  mark('quiz','done');
+  const msg=pc>=85?'Strong. You could explain most of this to someone else.':pc>=60?'A solid base. Reread the explanations for the ones you missed.':'Good first pass. Go back to the sections for your weak topics, then retry the questions you missed.';
+  $('#quizBox').innerHTML=`<div class="quizcard"><div class="scoreline">${quiz.score}/${n}</div><p>${pc}%. ${msg}</p>
+    <div class="topics">${Object.keys(quiz.topic).map(k=>{const t=quiz.topic[k];return `<div><span>${TOPIC_NAMES[k]}</span><span class="tb"><i style="width:${t.r/t.n*100}%"></i></span><span>${t.r}/${t.n}</span></div>`;}).join('')}</div>
+    <div class="row">${quiz.missed.length?`<button class="btn" id="retryMissed">Retry the ${quiz.missed.length} I missed</button>`:''}<button class="btn alt" id="restartQuiz">Start again with all ${QUIZ.length}</button></div></div>`;
+  const rm=$('#retryMissed');if(rm)rm.addEventListener('click',()=>startQuiz(quiz.missed.slice()));
+  $('#restartQuiz').addEventListener('click',()=>startQuiz(QUIZ.map((_,i)=>i)));
+}
+function buildQuiz(){
+  $('#quizBox').innerHTML=`<div class="quizcard"><p><b>${QUIZ.length} questions.</b> Four options each, shuffled every time. You get an explanation after every answer, right or wrong.</p><div class="row"><button class="btn" id="startQuiz">Start the quiz</button></div></div>`;
+  $('#startQuiz').addEventListener('click',()=>startQuiz(QUIZ.map((_,i)=>i)));
+}
+
+/* ---------- wrap-up ---------- */
+function buildWrap(){
+  $('#wrapPrompts').innerHTML=
+    ta('wrap-three','Wrap-up: three things I now understand','Three things you understand now that you did not at the start of the session.',4)+
+    ta('wrap-unsure','Wrap-up: one thing I am still unsure about','One thing you are still unsure about. This is what to ask your tutor.',3)+
+    ta('wrap-customer','Wrap-up: should I modify my engine?','A customer asks: <i>"Is it worth modifying my engine?"</i> Write the advice you would give, including at least two risks and one thing they must do legally.',5);
+  $('#postSlides').innerHTML=sliders('post');
+  $('#compareBtn').addEventListener('click',()=>{
+    const rows=TOPICS.map(([k,n])=>{
+      const a=Store.get('set:pre:'+k,false)?Store.get('pre:'+k,3):null;
+      const b=Store.get('set:post:'+k,false)?Store.get('post:'+k,3):null;
+      let d='-';if(a!==null&&b!==null){const x=b-a;d=x>0?`<span class="up">+${x}</span>`:String(x);}
+      return `<tr><td>${n}</td><td>${a??'-'}</td><td>${b??'-'}</td><td>${d}</td></tr>`;}).join('');
+    $('#compare').innerHTML=`<div class="tblwrap"><table class="cmp"><thead><tr><th>Topic</th><th>Start</th><th>Now</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table></div><p>Anything still at 1 or 2 is your revision list.</p>`;
+    mark('wrap','done');
+  });
+  $('#dlBtn').addEventListener('click',()=>{
+    let t='INSIDE THE ENGINE: MY NOTES\nSaved: '+new Date().toLocaleString('en-GB')+'\n\n';
+    const q=Store.get('quizLast',null);if(q)t+='Latest quiz score: '+q+'\n\n';
+    t+='Confidence (start / now):\n'+TOPICS.map(([k,n])=>'- '+n+': '+(Store.get('set:pre:'+k,false)?Store.get('pre:'+k,3):'-')+' / '+(Store.get('set:post:'+k,false)?Store.get('post:'+k,3):'-')).join('\n')+'\n\n';
+    $$('textarea[data-note]').forEach(x=>{if(x.value.trim())t+='## '+x.dataset.label+'\n'+x.value.trim()+'\n\n';});
+    const blob=new Blob([t],{type:'text/plain'});const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download='engine-notes.txt';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),500);
+  });
+  $('#printBtn').addEventListener('click',()=>{$$('details.card').forEach(d=>d.open=true);window.print();});
+}
+
+/* ---------- init ---------- */
+buildNav();buildStart();buildCycle();buildCards();buildWL();buildCases();buildMaths();buildQuiz();buildWrap();
+hydrate();paintRail();watchActive();
+</script>
+</body>
+</html>
